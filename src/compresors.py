@@ -24,7 +24,7 @@ class RandKCompressor(Compressor):
         torch.manual_seed(seed)
         size = logits.size()
         new_size = size[:-1] + (self.k,)
-        sparse_logits = torch.zeros(new_size, dtype= logits.dtype)
+        sparse_logits = torch.zeros(new_size, dtype=logits.dtype, requires_grad=True)
         for i in range(size[0]):
             for j in range(size[1]):
                 indices = torch.randperm(size[-1], device=logits.device)[:k]
@@ -35,7 +35,8 @@ class RandKCompressor(Compressor):
 
     def decomp_rand_k(self, sparse_logits, seed, size):
         torch.manual_seed(seed)
-        decomp_logits  = torch.full(size, float('-inf') ,dtype= sparse_logits.dtype)
+        # decomp_logits  = torch.full(size, float('-inf') ,dtype=sparse_logits.dtype)
+        decomp_logits  = torch.full(size, -10**7 ,dtype=sparse_logits.dtype)
         for i in range(size[0]):
             for j in range(size[1]):
                 indices = torch.randperm(size[-1], device=sparse_logits.device)[:self.k]
@@ -43,7 +44,7 @@ class RandKCompressor(Compressor):
                 decomp_logits[i, j, indices] = sparse_logits[i, j]
         return decomp_logits
 
-class RandKCompressor(Compressor):
+class TopKCompressor(Compressor):
     def __init__(self, k = 3):
         self.k = k
 
@@ -57,7 +58,8 @@ class RandKCompressor(Compressor):
         return sparse_logits, indices, size
 
     def decomp_top_k(self, sparse_logits, indices, size):
-        decomp_logits  = torch.full(size, float('-inf'), dtype= sparse_logits.dtype, device= sparse_logits.device)
+        decomp_logits = torch.full(size, float('-inf'), dtype=sparse_logits.dtype, device=sparse_logits.device)
+        decomp_logits = torch.full(size, -10**7, dtype=sparse_logits.dtype, device=sparse_logits.device)
         decomp_logits.scatter_(-1, indices, sparse_logits)
         return decomp_logits
 
@@ -66,7 +68,7 @@ class ExpDitheringCompressor(Compressor):
         self.b = b
         self.s = s 
         self.p = p
-    
+
     def compress(self, logits):
         norm_logits = torch.norm(logits.float(), self.p, dim=-1, keepdim=True)
         normalized_logits = logits.abs() / norm_logits
@@ -93,9 +95,14 @@ class DifferentiableCompress(torch.autograd.Function):
     def backward(ctx, grad_output):
         return grad_output, None
     
-def compress_model(model, compressor: Compressor = IdenticalCompressor()):
-    return nn.Sequential(
-        model, 
-        compressor
-    )
+class CompressedModel(nn.Module):
+    def __init__(self, model, compressor: Compressor = IdenticalCompressor()):
+        super().__init__()
+        self.model = model
+        self.compressor = compressor
+    
+    def forward(self, x):
+        out = self.model(x)
+        return DifferentiableCompress.apply(out, self.compressor)
+
     

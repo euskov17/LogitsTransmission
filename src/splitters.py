@@ -134,7 +134,7 @@ def create_probabilistic_client_loaders(
     
     return client_loaders
 
-def get_imbalanced_client_loaders(num_clients=3, batch_size=128, class_elements_per_user=500):
+def get_imbalanced_client_loaders(num_clients=3, classes_per_client=7, batch_size=128, class_elements_per_user=500):
     client_train_loaders = []
     client_val_loaders = []
     transform=transforms.Compose(
@@ -155,7 +155,7 @@ def get_imbalanced_client_loaders(num_clients=3, batch_size=128, class_elements_
         class_indices[label].append(idx)
     for i in range(num_clients):
         client_indices = []
-        client_classes = random.sample(range(10), 7)
+        client_classes = random.sample(range(10), classes_per_client)
         for obj_class in client_classes:
             client_indices += random.sample(class_indices[obj_class], class_elements_per_user)
         data = Subset(cifar_train, client_indices)
