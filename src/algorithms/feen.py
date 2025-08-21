@@ -1,6 +1,7 @@
 import random
 import torch
 import numpy as np
+from .compresors import EFCompressor
 
 def sync_clients(models, criterion, batch, device):
     inputs, target = batch
@@ -10,8 +11,12 @@ def sync_clients(models, criterion, batch, device):
     for model in models:
         model.train()
         logits.append(model(inputs))
-
+        
     logits = torch.stack(logits)
+    for model in models:
+        if isinstance(model.compressor, EFCompressor):
+            model.compressor.update_state(logits.detach())
+
     logits = logits.mean(0)
     loss = criterion(logits, target)
     loss.backward()
@@ -29,9 +34,6 @@ def feen_training_step(models, states, optimizers, local_loaders, common_loader,
     for model, state, loader, optimizer in zip(models, states, local_loaders, optimizers):
         state.set_weights(model)
 
-        for param, new_param in zip(model.parameters(), state.state):
-            param.data.add_(-state.gamma * state.lmbd * new_param)
-
         for _ in range(n_local_steps):
             inputs, target = next(iter(loader))
             inputs = inputs.to(device)
@@ -41,7 +43,6 @@ def feen_training_step(models, states, optimizers, local_loaders, common_loader,
 
             reg = state.get_reg_term(model)
             loss = loss_local * state.gamma + reg
-            # loss *= 1000
 
             optimizer.zero_grad()
             loss.backward()
@@ -51,5 +52,3 @@ def feen_training_step(models, states, optimizers, local_loaders, common_loader,
             loss_reg_history.append(reg.detach().cpu().item())
     
     return np.mean(loss_history), np.mean(loss_reg_history) 
-    # import numpy as np
-    # print(f"Local loss avg = {np.mean(loss_history)}, Reg loss part {np.mean(loss_reg_history)}")

@@ -12,14 +12,12 @@ class ClientState:
         for idx, param in enumerate(model.parameters()):
             self.state[idx] += param.grad - self.prev_state[idx]
             self.prev_state[idx] = param.grad
-            # param.grad = torch.zeros_like(param.grad)
             param.grad.mult_(0.0)
     
     def global_step(self, model):
         for idx, param in enumerate(model.parameters()):
             self.state[idx] = param.grad
             self.prev_state[idx] = param.grad
-            # param.grad = torch.zeros_like(param.grad)
             param.grad.data.zero_()
 
     def set_weights(self, model):
@@ -54,7 +52,6 @@ class AdamClientState:
             self.state[idx] =  (self.m_t[idx] / (1 - self.beta_1_t)) / (torch.sqrt(self.v_t[idx] / (1 - self.beta_2_t) + self.epsilon))
             self.beta_1_t *= self.beta_1
             self.beta_2_t *= self.beta_2
-            # param.grad = torch.zeros_like(param.grad
             param.grad.data.zero_()
     
     def set_weights(self, model):

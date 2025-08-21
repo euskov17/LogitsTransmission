@@ -147,6 +147,46 @@ def get_imbalanced_client_loaders(num_clients=3, classes_per_client=7, batch_siz
                                    download=True, transform=transform)
     cifar_test = datasets.CIFAR10(root='./data_cifar', train=False,
                                    download=True, transform=transform)
+    cifar_common = Subset(cifar_train, range(1000))
+    cifar_train = Subset(cifar_train, range(1000, len(cifar_train)))
+    
+    class_indices = defaultdict(list)
+    for idx, (_, label) in enumerate(cifar_train):
+        class_indices[label].append(idx)
+    for i in range(num_clients):
+        client_indices = []
+        client_classes = random.sample(range(10), classes_per_client)
+        for obj_class in client_classes:
+            client_indices += random.sample(class_indices[obj_class], class_elements_per_user)
+        data = Subset(cifar_train, client_indices)
+        train_size = len(data) - 1000
+        val_size = 1000
+        train, val = random_split(data, [train_size, val_size])
+        train = DataLoader(train, batch_size=batch_size, shuffle=True, drop_last=False)
+        val = DataLoader(val, batch_size=batch_size, shuffle=True, drop_last=False)
+        client_train_loaders.append(train)
+        client_val_loaders.append(val)
+    
+    # client_loaders = [DataLoader(data, batch_size=batch_size, shuffle=True, drop_last=False) for data in client_data]
+    common_loader = DataLoader(cifar_common, batch_size=batch_size, shuffle=True, drop_last=False)
+    validation_loader = DataLoader(cifar_test, batch_size=batch_size, shuffle=True, drop_last=False)
+    return client_train_loaders, client_val_loaders, common_loader, validation_loader
+
+
+
+def get_imbalanced_client_loaders_cifar100(num_clients=3, classes_per_client=30, batch_size=128, class_elements_per_user=50):
+    client_train_loaders = []
+    client_val_loaders = []
+    transform=transforms.Compose(
+        [
+            transforms.ToTensor(),
+            transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)),
+        ]
+    )
+    cifar_train = datasets.CIFAR100(root='./data_cifar100', train=True,
+                                   download=True, transform=transform)
+    cifar_test = datasets.CIFAR100(root='./data_cifar100', train=False,
+                                   download=True, transform=transform)
     cifar_common = Subset(cifar_train, range(5000))
     cifar_train = Subset(cifar_train, range(5000, len(cifar_train)))
     
@@ -155,7 +195,7 @@ def get_imbalanced_client_loaders(num_clients=3, classes_per_client=7, batch_siz
         class_indices[label].append(idx)
     for i in range(num_clients):
         client_indices = []
-        client_classes = random.sample(range(10), classes_per_client)
+        client_classes = random.sample(range(100), classes_per_client)
         for obj_class in client_classes:
             client_indices += random.sample(class_indices[obj_class], class_elements_per_user)
         data = Subset(cifar_train, client_indices)

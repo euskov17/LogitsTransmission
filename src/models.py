@@ -21,6 +21,10 @@ class BaseResNet18(nn.Module):
             torch.manual_seed(seed)
             torch.cuda.manual_seed(seed)
             self.model.fc = torch.nn.Linear(in_features=512, out_features=n_classes)
+            self.model.conv1 = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+
+            # Remove the max pooling layer
+            self.model.maxpool = nn.Identity()
 
     def forward(self, x):
         return self.model(x)

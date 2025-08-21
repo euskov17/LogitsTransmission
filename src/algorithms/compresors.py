@@ -75,17 +75,33 @@ class ExpDitheringCompressor(Compressor):
         
         levels = self.b ** -torch.arange(1, self.s + 1, dtype=logits.dtype, device=logits.device)  
         levels = torch.cat([torch.tensor([1.0], device=logits.device, dtype=logits.dtype), levels, torch.tensor([0.0], device=logits.device, dtype=logits.dtype)])
-        u = torch.sum(normalized_logits.unsqueeze(-1) <= levels.unsqueeze(0), dim=-1, dtype= float) 
+        u = torch.sum(normalized_logits.unsqueeze(-1) <= levels.unsqueeze(0), dim=-1, dtype=float) 
         
         lower = self.b ** -u
         upper = self.b ** -(u - 1)
-        lower = torch.where(u == 10, 0.0, lower)
+        lower = torch.where(u == self.s + 1, 0.0, lower)
         
         probs_upper = (normalized_logits - lower) / (upper - lower)
+        assert (probs_upper >= 0).all() and (probs_upper <= 1).all(), "Probabilities out of bounds"
         bern = torch.bernoulli(probs_upper)
         quantized = torch.where(bern == 1, upper, lower)
         result = norm_logits * torch.sign(logits) * quantized
+        result.requires_grad_(True)
         return result
+    
+class EFCompressor(Compressor):
+    def __init__(self, num_classes, device, compressor: Compressor = IdenticalCompressor()):
+        self.state = torch.zeros(num_classes).to(device)
+        self.compressor = compressor
+
+    def compress(self, logits):
+        deltas = logits - self.state
+        cs = DifferentiableCompress.apply(deltas, self.compressor)
+        logits = self.state + cs
+        return logits
+
+    def update_state(self, compressed_logits):
+        self.state += compressed_logits.mean((0, 1))
 
 class DifferentiableCompress(torch.autograd.Function):
     @staticmethod
